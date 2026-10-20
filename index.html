@@ -21,7 +21,7 @@ button.rec{background:var(--rec);border-color:var(--rec)}button:disabled{opacity
 </div>
 <script>
 // 設定：Google Cloud の OAuth クライアントID と、保存先フォルダのID
-const CLIENT_ID='867313617372-799o29gku68bi4ig20vg880k7oq7k07n.apps.googleusercontent.com', FOLDER_ID='__FOLDER_ID__';
+const CLIENT_ID='867313617372-799o29gku68bi4ig20vg880k7oq7k07n.apps.googleusercontent.com', FOLDER_ID='1iVdFyUsLiLPR5Ch6iH1MBRN1UvKlCE56';
 </script>
 <script src="https://accounts.google.com/gsi/client" async></script>
 <script>
@@ -51,7 +51,7 @@ function finish(){$('stop').disabled=true;say('録画を終えました。保存
   const loc=document.createElement('button');loc.textContent='この端末にも保存';loc.style.marginLeft='8px';b.after(loc);
   loc.onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click()};
   b.onclick=()=>{b.disabled=true;
-    google.accounts.oauth2.initTokenClient({client_id:CLIENT_ID,scope:'https://www.googleapis.com/auth/drive.file',
+    google.accounts.oauth2.initTokenClient({client_id:CLIENT_ID,scope:'https://www.googleapis.com/auth/drive',
       callback:async r=>{if(!r.access_token){say('ログインできませんでした');b.disabled=false;return}
         try{await upload(r.access_token,blob,name);say('ドライブに保存しました');$('msg').textContent=name+'（'+Math.round(blob.size/1048576)+' MB）'}
         catch(e){say('保存できませんでした');$('msg').textContent=String(e.message||e)+'。「この端末にも保存」で手元に残してください。';b.disabled=false}}}).requestAccessToken();};
