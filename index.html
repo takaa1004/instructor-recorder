@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>講師の思考 収録</title>
+<style>
+:root{--bg:#f6f7f9;--fg:#1c2330;--mut:#5d6778;--card:#fff;--line:#d9dee7;--acc:#0b5fff;--rec:#d6293e}
+@media(prefers-color-scheme:dark){:root{--bg:#12161d;--fg:#e8ecf3;--mut:#9aa5b8;--card:#1b212b;--line:#2c3544;--acc:#6ea0ff;--rec:#ff6a7b}}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.7 system-ui,"Hiragino Sans","Noto Sans JP",sans-serif}
+main{max-width:600px;margin:0 auto;padding:20px max(16px,env(safe-area-inset-left))}
+h1{font-size:22px;margin:0 0 4px}.mut{color:var(--mut);font-size:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin:0 0 14px}
+button{font:inherit;padding:12px 20px;border-radius:8px;border:1px solid var(--acc);background:var(--acc);color:#fff;cursor:pointer}
+button.rec{background:var(--rec);border-color:var(--rec)}button:disabled{opacity:.4}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}#st{font-weight:600}
+</style></head><body><main>
+<h1>講師の思考 収録</h1>
+<p class="mut">画面と音声を録って、福井さんのGoogleドライブに保存します。</p>
+<div class="card">
+<div class="row"><button id="go">スタート</button><button id="stop" class="rec" disabled>終わる</button></div>
+<p id="st">待機中</p>
+<p class="mut" id="msg">スタートを押すと、共有する画面（TradingViewのタブ）の選択と、マイクの許可が出ます。携帯のマイクを使う時は、携帯でこのページを開いてスタートを押し、画面の共有は選ばず閉じてください。</p>
+</div>
+<script>
+// 設定：Google Cloud の OAuth クライアントID と、保存先フォルダのID
+const CLIENT_ID='__CLIENT_ID__', FOLDER_ID='__FOLDER_ID__';
+</script>
+<script src="https://accounts.google.com/gsi/client" async></script>
+<script>
+const $=id=>document.getElementById(id);let mr=null,chunks=[],t0=0,iv=0,srcs=[],vid=false;
+const say=t=>$('st').textContent=t;
+async function mixed(){let scr=null,mic=null;
+  try{scr=await navigator.mediaDevices.getDisplayMedia({video:true,audio:true})}catch(e){}
+  try{mic=await navigator.mediaDevices.getUserMedia({audio:true})}catch(e){}
+  if(!scr&&!mic)throw new Error('画面もマイクも許可されませんでした');
+  srcs=[scr,mic].filter(Boolean);vid=!!scr;const tr=[];if(scr)tr.push(...scr.getVideoTracks());
+  const au=srcs.filter(x=>x.getAudioTracks().length);
+  if(au.length){const ac=new AudioContext(),d=ac.createMediaStreamDestination();au.forEach(x=>ac.createMediaStreamSource(new MediaStream(x.getAudioTracks())).connect(d));tr.push(...d.stream.getAudioTracks())}
+  return new MediaStream(tr)}
+$('go').onclick=async()=>{try{const st=await mixed();chunks=[];
+  mr=new MediaRecorder(st,{videoBitsPerSecond:1500000,audioBitsPerSecond:96000});t0=Date.now();
+  mr.ondataavailable=e=>e.data.size&&chunks.push(e.data);
+  mr.onstop=()=>{clearInterval(iv);srcs.forEach(x=>x.getTracks().forEach(t=>t.stop()));finish()};
+  const v=st.getVideoTracks()[0];v&&(v.onended=()=>mr.state!=='inactive'&&mr.stop());
+  iv=setInterval(()=>{const s=Math.floor((Date.now()-t0)/1000);say('録画中 '+Math.floor(s/60)+':'+String(s%60).padStart(2,'0'))},500);
+  mr.start(1000);$('go').disabled=true;$('stop').disabled=false;
+ }catch(e){say('始められません');$('msg').textContent=e.message||String(e)}};
+$('stop').onclick=()=>mr&&mr.state!=='inactive'&&mr.stop();
+function finish(){$('stop').disabled=true;say('録画を終えました。保存の準備中…');
+  const blob=new Blob(chunks,{type:mr.mimeType});
+  const name=(vid?'screen':'voice')+'_'+new Date(t0).toISOString().slice(0,19).replace(/[:T]/g,'-')+'Z.webm';
+  const b=document.createElement('button');b.textContent='ドライブに保存';$('msg').textContent='次のボタンを押すと、Googleのログインが出ます。';$('msg').after(b);
+  const loc=document.createElement('button');loc.textContent='この端末にも保存';loc.style.marginLeft='8px';b.after(loc);
+  loc.onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click()};
+  b.onclick=()=>{b.disabled=true;
+    google.accounts.oauth2.initTokenClient({client_id:CLIENT_ID,scope:'https://www.googleapis.com/auth/drive.file',
+      callback:async r=>{if(!r.access_token){say('ログインできませんでした');b.disabled=false;return}
+        try{await upload(r.access_token,blob,name);say('ドライブに保存しました');$('msg').textContent=name+'（'+Math.round(blob.size/1048576)+' MB）'}
+        catch(e){say('保存できませんでした');$('msg').textContent=String(e.message||e)+'。「この端末にも保存」で手元に残してください。';b.disabled=false}}}).requestAccessToken();};
+  say('保存できます')}
+async function upload(tok,blob,name){
+  const meta={name,mimeType:blob.type,parents:FOLDER_ID.startsWith('__')?undefined:[FOLDER_ID]};
+  const r=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable',{method:'POST',
+    headers:{Authorization:'Bearer '+tok,'Content-Type':'application/json; charset=UTF-8','X-Upload-Content-Type':blob.type},body:JSON.stringify(meta)});
+  if(!r.ok)throw new Error('開始に失敗 '+r.status);const url=r.headers.get('Location');
+  const CH=8*1048576;let pos=0;
+  while(pos<blob.size){const end=Math.min(pos+CH,blob.size);
+    const x=await fetch(url,{method:'PUT',headers:{'Content-Range':`bytes ${pos}-${end-1}/${blob.size}`},body:blob.slice(pos,end)});
+    if(x.status===308){pos=end;say('保存中 '+Math.round(pos/blob.size*100)+'%');continue}
+    if(x.ok){pos=end;continue}throw new Error('送信に失敗 '+x.status)}
+}
+</script></main></body></html>
